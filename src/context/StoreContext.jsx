@@ -1,14 +1,17 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 
 const StoreContext = createContext();
 
 export const useStore = () => useContext(StoreContext);
 
 export const StoreProvider = ({ children }) => {
-  // Mock Data
-  const [currentUser, setCurrentUser] = useState(null); // { id, role, name }
+  // Check if Supabase is configured
+  const isSupabaseEnabled = !!supabase;
 
-  const [users] = useState([
+  // State
+  const [currentUser, setCurrentUser] = useState(null);
+  const [users, setUsers] = useState([
     { id: 1, username: 'admin', role: 'admin', name: 'Administrador' },
     { id: 2, username: 'carrito1', role: 'carrito', name: 'Carrito de Tacos' },
     { id: 3, username: 'carrito2', role: 'carrito', name: 'Carrito de Burgers' },
@@ -25,52 +28,144 @@ export const StoreProvider = ({ children }) => {
   const [orders, setOrders] = useState([]);
   const [tables] = useState([1, 2, 3, 4, 5]);
 
-  const login = (username) => {
-    const user = users.find(u => u.username === username);
-    if (user) {
-      setCurrentUser(user);
-      return true;
+  // Load initial data from Supabase
+  useEffect(() => {
+    if (!isSupabaseEnabled) return;
+
+    const fetchData = async () => {
+      try {
+        const { data: usersData } = await supabase.from('users').select('*');
+        if (usersData) setUsers(usersData);
+
+        const { data: menuData } = await supabase.from('menu_items').select('*');
+        // Map snake_case to camelCase if needed, or adjust usage. 
+        // For simplicity, let's keep consistency. 
+        // DB columns: owner_id, cost_price, selling_price
+        // App expects: ownerId, costPrice, sellingPrice
+        if (menuData) {
+          setMenuItems(menuData.map(item => ({
+            ...item,
+            ownerId: item.owner_id,
+            costPrice: item.cost_price,
+            sellingPrice: item.selling_price
+          })));
+        }
+
+        const { data: ordersData } = await supabase.from('orders').select('*');
+        if (ordersData) {
+            setOrders(ordersData.map(o => ({
+                ...o,
+                tableId: o.table_id,
+                // created_at is automatic
+            })));
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
+    };
+
+    fetchData();
+
+    // Realtime Subscriptions
+    const channel = supabase.channel('main_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, (payload) => {
+        // Refresh menu on change
+        // For simplicity, we just fetch all or update local state based on payload
+        // Ideally: optimistic update or detailed merge. 
+        // Let's re-fetch to be safe and simple
+        fetchData(); 
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isSupabaseEnabled]);
+
+
+  const login = async (username) => {
+    if (isSupabaseEnabled) {
+        const { data } = await supabase.from('users').select('*').eq('username', username).single();
+        if (data) {
+            setCurrentUser(data);
+            return true;
+        }
+        return false;
+    } else {
+        const user = users.find(u => u.username === username);
+        if (user) {
+          setCurrentUser(user);
+          return true;
+        }
+        return false;
     }
-    return false;
   };
 
   const logout = () => setCurrentUser(null);
 
   // Carrito Actions
-  const updateDishStatus = (id, active) => {
-    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, active } : item));
+  const updateDishStatus = async (id, active) => {
+    if (isSupabaseEnabled) {
+        await supabase.from('menu_items').update({ active }).eq('id', id);
+        // State updates via subscription
+    } else {
+        setMenuItems(prev => prev.map(item => item.id === id ? { ...item, active } : item));
+    }
   };
 
-  const updateDishCost = (id, costPrice) => {
-    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, costPrice } : item));
+  const updateDishCost = async (id, costPrice) => {
+    if (isSupabaseEnabled) {
+        await supabase.from('menu_items').update({ cost_price: costPrice }).eq('id', id);
+    } else {
+        setMenuItems(prev => prev.map(item => item.id === id ? { ...item, costPrice } : item));
+    }
   };
   
-  const notifyDispatch = (orderId) => {
-    // In a real app, this would notify the restaurant/waiter
+  const notifyDispatch = async (orderId) => {
     console.log(`Order ${orderId} dispatched from carrito`);
     updateOrderStatus(orderId, 'en_camino');
   };
 
   // Restaurant Actions
-  const updateSellingPrice = (id, sellingPrice) => {
-    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, sellingPrice } : item));
+  const updateSellingPrice = async (id, sellingPrice) => {
+    if (isSupabaseEnabled) {
+        await supabase.from('menu_items').update({ selling_price: sellingPrice }).eq('id', id);
+    } else {
+        setMenuItems(prev => prev.map(item => item.id === id ? { ...item, sellingPrice } : item));
+    }
   };
 
   // Waiter/Customer Actions
-  const placeOrder = (tableId, items) => {
-    const newOrder = {
-      id: Date.now(),
-      tableId,
-      items, // [{ itemId, quantity, ... }]
-      status: 'pendiente', // pendiente, confirmado, en_camino, entregado
-      timestamp: new Date().toISOString(),
-    };
-    setOrders(prev => [...prev, newOrder]);
-    return newOrder.id;
+  const placeOrder = async (tableId, items) => {
+    if (isSupabaseEnabled) {
+        const { data } = await supabase.from('orders').insert([{
+            table_id: tableId,
+            items: items,
+            status: 'pendiente'
+        }]).select();
+        return data ? data[0].id : null;
+    } else {
+        const newOrder = {
+          id: Date.now(),
+          tableId,
+          items, 
+          status: 'pendiente', 
+          timestamp: new Date().toISOString(),
+        };
+        setOrders(prev => [...prev, newOrder]);
+        return newOrder.id;
+    }
   };
 
-  const updateOrderStatus = (orderId, status) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+  const updateOrderStatus = async (orderId, status) => {
+    if (isSupabaseEnabled) {
+        await supabase.from('orders').update({ status }).eq('id', orderId);
+    } else {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    }
   };
 
   return (
@@ -87,7 +182,8 @@ export const StoreProvider = ({ children }) => {
       updateSellingPrice,
       placeOrder,
       updateOrderStatus,
-      notifyDispatch
+      notifyDispatch,
+      isSupabaseEnabled // Export flag to show UI status
     }}>
       {children}
     </StoreContext.Provider>
