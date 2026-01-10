@@ -1,17 +1,38 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { ShoppingCart, Plus, Minus, X } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, X, Trash2 } from 'lucide-react';
 
 const ClientMenu = () => {
-  const { tableId } = useParams();
-  const navigate = useNavigate();
-  const { menuItems, placeOrder } = useStore();
+  const { restaurantId, tableId } = useParams();
+  const { carritoItems, restaurantMenu, placeOrder, restaurants, tables } = useStore();
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Only show active items
-  const activeItems = menuItems.filter(item => item.active);
+  // Identify Restaurant and Table
+  const restaurant = restaurants.find(r => r.id === Number(restaurantId));
+  const table = tables.find(t => t.id === Number(tableId));
+
+  // Build the Menu:
+  // 1. Get all items that THIS restaurant has added to their menu (restaurant_menu_items)
+  // 2. Join with the original carrito item details (name, description)
+  // 3. Use the restaurant's selling_price
+  // 4. Filter only active ones
+  
+  const menuList = restaurantMenu
+    .filter(rm => rm.restaurantId === Number(restaurantId) && rm.active && rm.sellingPrice > 0)
+    .map(rm => {
+        const originalItem = carritoItems.find(ci => ci.id === rm.menuItemId);
+        if (!originalItem) return null;
+        return {
+            ...originalItem, // name, description, ownerId
+            id: rm.menuItemId, // Keep original ID for reference or use rm.id? Use original ID for grouping orders by owner
+            sellingPrice: rm.sellingPrice,
+            menuLinkId: rm.id
+        };
+    })
+    .filter(Boolean);
+
 
   const addToCart = (item) => {
     setCart(prev => {
@@ -40,17 +61,22 @@ const ClientMenu = () => {
 
   const handleOrder = () => {
     if (cart.length === 0) return;
-    placeOrder(tableId, cart);
-    alert('¡Pedido realizado con éxito! Un camarero confirmará tu orden pronto.');
+    placeOrder(Number(restaurantId), Number(tableId), cart);
+    alert('¡Solicitud enviada! Un camarero confirmará tu orden en breve.');
     setCart([]);
     setIsCartOpen(false);
   };
+
+  if (!restaurant) return <div className="p-10 text-center">Cargando menú... (o restaurante no encontrado)</div>;
 
   return (
     <div className="pb-20">
       <header className="bg-orange-600 text-white p-4 sticky top-0 z-10 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-bold">Menú Digital - Mesa {tableId}</h1>
+          <div>
+              <h1 className="text-xl font-bold">{restaurant.name}</h1>
+              <p className="text-xs opacity-90">Mesa {table ? table.table_number : tableId}</p>
+          </div>
           <button 
             onClick={() => setIsCartOpen(!isCartOpen)}
             className="relative p-2"
@@ -66,32 +92,37 @@ const ClientMenu = () => {
       </header>
 
       <div className="container mx-auto p-4">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {activeItems.map(item => (
-            <div key={item.id} className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
-              <div className="h-40 bg-gray-200 flex items-center justify-center text-gray-400">
-                {/* Placeholder for image */}
-                <span className="text-4xl">🍽️</span>
-              </div>
-              <div className="p-4 flex-1 flex flex-col">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg">{item.name}</h3>
-                  <span className="font-bold text-orange-600 text-lg">${item.sellingPrice}</span>
+        {menuList.length === 0 ? (
+           <div className="text-center text-gray-500 mt-10">
+             <p className="text-xl">Este restaurante aún no ha configurado su menú.</p>
+           </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {menuList.map(item => (
+              <div key={item.id} className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="h-40 bg-gray-200 flex items-center justify-center text-gray-400">
+                  <span className="text-4xl">🍽️</span>
                 </div>
-                <p className="text-gray-600 text-sm mb-4 flex-1">{item.description}</p>
-                <button 
-                  onClick={() => addToCart(item)}
-                  className="w-full bg-orange-100 text-orange-700 py-2 rounded hover:bg-orange-200 font-medium flex items-center justify-center gap-2"
-                >
-                  <Plus size={18} /> Agregar
-                </button>
+                <div className="p-4 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-lg">{item.name}</h3>
+                    <span className="font-bold text-orange-600 text-lg">${item.sellingPrice}</span>
+                  </div>
+                  <p className="text-gray-600 text-sm mb-4 flex-1">{item.description}</p>
+                  <button 
+                    onClick={() => addToCart(item)}
+                    className="w-full bg-orange-100 text-orange-700 py-2 rounded hover:bg-orange-200 font-medium flex items-center justify-center gap-2"
+                  >
+                    <Plus size={18} /> Agregar
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Cart Drawer / Modal */}
+      {/* Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-end">
           <div className="bg-white w-full max-w-md h-full flex flex-col animate-slide-in">
@@ -139,7 +170,7 @@ const ClientMenu = () => {
                 disabled={cart.length === 0}
                 className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 disabled:opacity-50"
               >
-                Confirmar Pedido
+                Solicitar Pedido
               </button>
             </div>
           </div>
@@ -148,8 +179,5 @@ const ClientMenu = () => {
     </div>
   );
 };
-
-// Simple Trash icon since I forgot to import it in the component but used it
-import { Trash2 } from 'lucide-react';
 
 export default ClientMenu;

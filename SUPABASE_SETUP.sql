@@ -1,7 +1,18 @@
+-- Actualización para incluir contraseñas (Ejecutar si ya creaste la tabla users anteriormente)
+-- Si es una instalación nueva, usa el script completo de abajo.
+
+-- MIGRACIÓN:
+-- alter table users add column password text default '123456';
+
+-- ==========================================
+-- SCRIPT DE INSTALACIÓN COMPLETO (V2)
+-- ==========================================
+
 -- 1. Create Users Table
 create table users (
   id serial primary key,
   username text unique not null,
+  password text not null default '123456', -- Nueva columna
   role text not null check (role in ('admin', 'carrito', 'restaurant', 'waiter')),
   name text not null,
   created_at timestamptz default now()
@@ -31,16 +42,17 @@ create table orders (
 -- 4. Enable Realtime for these tables
 alter publication supabase_realtime add table orders;
 alter publication supabase_realtime add table menu_items;
+alter publication supabase_realtime add table users; -- Enable realtime for users too
 
 -- 5. Seed Initial Data (Mock Data Migration)
-insert into users (username, role, name) values
-  ('admin', 'admin', 'Administrador'),
-  ('carrito1', 'carrito', 'Carrito de Tacos'),
-  ('carrito2', 'carrito', 'Carrito de Burgers'),
-  ('restaurant', 'restaurant', 'El Gran Restaurant'),
-  ('waiter1', 'waiter', 'Camarero Juan');
+insert into users (username, password, role, name) values
+  ('admin', 'admin123', 'admin', 'Administrador Principal'),
+  ('carrito1', '123456', 'carrito', 'Carrito de Tacos'),
+  ('carrito2', '123456', 'carrito', 'Carrito de Burgers'),
+  ('restaurant', '123456', 'restaurant', 'El Gran Restaurant'),
+  ('waiter1', '123456', 'waiter', 'Camarero Juan');
 
--- Insert Menu Items (Assuming IDs from above match 1-5, but using subqueries to be safe)
+-- Insert Menu Items
 insert into menu_items (owner_id, name, description, cost_price, selling_price, active) values
   ((select id from users where username = 'carrito1'), 'Taco al Pastor', 'Delicioso taco', 10, 15, true),
   ((select id from users where username = 'carrito1'), 'Taco de Asada', 'Carne asada', 12, 18, true),
