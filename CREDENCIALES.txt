@@ -1,0 +1,41 @@
+# Credenciales de Acceso - Sistema de Menú
+
+Este archivo contiene las credenciales predeterminadas para los diferentes roles del sistema.
+Si has cambiado alguna contraseña manualmente, estas credenciales podrían no funcionar.
+
+---
+
+### 👑 Administrador (Admin)
+**Acceso Total:** Crea Restaurantes, Carritos y Usuarios.
+- **Usuario:** `admin`
+- **Contraseña:** `admin123`
+
+---
+
+### 🍽️ Restaurante (Restaurant)
+**Gestión:** Crea Mesas, Gestiona Menú (Precios) y Camareros.
+- **Usuario:** `restaurant`
+- **Contraseña:** `123456`
+
+---
+
+### 🛒 Carritos / Proveedores (Carrito)
+**Gestión:** Crea Productos y Platos.
+- **Usuario:** `carrito1`
+- **Contraseña:** `123456`
+
+- **Usuario:** `carrito2`
+- **Contraseña:** `123456`
+
+---
+
+### 🤵 Camareros (Waiter)
+**Operación:** Gestiona Pedidos, Mesas y Propinas.
+- **Usuario:** `waiter1`
+- **Contraseña:** `123456`
+
+---
+
+### 📝 Notas Importantes
+1. Si un usuario no funciona, puedes resetearlo desde el Panel de Administrador (logueándote como `admin`) o ejecutando el script SQL de reseteo.
+2. Los nuevos usuarios creados desde el panel tendrán la contraseña que tú les asignes al momento de crearlos.

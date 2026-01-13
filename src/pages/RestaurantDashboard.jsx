@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { DollarSign, ChefHat, Activity, PlusCircle, Check, MapPin, QrCode, Trash2, Edit2, Save, X, ToggleLeft, ToggleRight, ArrowUp, ArrowDown } from 'lucide-react';
+import { DollarSign, ChefHat, Activity, PlusCircle, Check, MapPin, QrCode, Trash2, Edit2, Save, X, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, TrendingUp, ShoppingBag, Users } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const RestaurantDashboard = () => {
   const { 
       carritoItems, restaurantMenu, getMyRestaurant, setRestaurantMenuItem, 
-      orders, users, tables, createTable, updateTable, deleteTable, carritos 
+      orders, users, tables, createTable, updateTable, deleteTable, carritos, createUser 
   } = useStore();
   
-  const [activeTab, setActiveTab] = useState('menu'); // 'menu' | 'add' | 'tables'
+  const [activeTab, setActiveTab] = useState('menu'); // 'menu' | 'add' | 'tables' | 'staff' | 'analytics'
   const [priceInput, setPriceInput] = useState({});
   
   // Table Management State
@@ -18,7 +19,21 @@ const RestaurantDashboard = () => {
   const [editTableNum, setEditTableNum] = useState('');
   const [showQrTableId, setShowQrTableId] = useState(null);
 
+  // Staff Management State
+  const [newWaiterName, setNewWaiterName] = useState('');
+  const [newWaiterUser, setNewWaiterUser] = useState('');
+  const [newWaiterPass, setNewWaiterPass] = useState('');
+
   const myRestaurant = getMyRestaurant();
+
+  // Tag Definitions
+  const availableTags = [
+      { id: 'veggie', label: 'Vegetariano', icon: '🥗' },
+      { id: 'vegan', label: 'Vegano', icon: '🌱' },
+      { id: 'gluten_free', label: 'Sin Gluten', icon: '🌾' },
+      { id: 'spicy', label: 'Picante', icon: '🌶️' },
+      { id: 'sugar_free', label: 'Sin Azúcar', icon: '🍬' }
+  ];
 
   if (!myRestaurant) {
       return <div className="p-10 text-center text-red-500">Error: No tienes un restaurante asignado. Contacta al administrador.</div>;
@@ -31,6 +46,46 @@ const RestaurantDashboard = () => {
   );
   const myOrders = orders.filter(o => o.restaurantId === myRestaurant.id);
   const myTables = tables.filter(t => t.restaurant_id === myRestaurant.id).sort((a, b) => a.position - b.position);
+  const myWaiters = users.filter(u => u.role === 'waiter' && u.restaurant_id === myRestaurant.id);
+
+  // --- ANALYTICS ---
+  const completedOrders = myOrders.filter(o => ['pagado', 'entregado'].includes(o.status));
+  const activeOrdersList = myOrders.filter(o => !['pagado', 'entregado', 'cancelado'].includes(o.status));
+  
+  const totalSales = completedOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.sellingPrice * i.quantity), 0), 0);
+
+  // Sales by Carrito
+  const salesByCarrito = carritos.map(c => {
+      let total = 0;
+      completedOrders.forEach(o => {
+          o.items.forEach(item => {
+              if (item.carritoId === c.id) {
+                  total += item.sellingPrice * item.quantity;
+              }
+          });
+      });
+      return { name: c.name, sales: total };
+  }).filter(c => c.sales > 0).sort((a, b) => b.sales - a.sales);
+
+  // Sales by Waiter
+  const salesByWaiter = myWaiters.map(w => {
+      const waiterOrders = completedOrders.filter(o => o.waiter_id === w.id);
+      const total = waiterOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.sellingPrice * i.quantity), 0), 0);
+      return { name: w.name, sales: total };
+  }).sort((a, b) => b.sales - a.sales);
+
+  // Top Items
+  const itemSales = {};
+  completedOrders.forEach(o => {
+      o.items.forEach(item => {
+          if (!itemSales[item.name]) itemSales[item.name] = 0;
+          itemSales[item.name] += item.quantity;
+      });
+  });
+  const topItems = Object.keys(itemSales)
+      .map(name => ({ name, quantity: itemSales[name] }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
 
   // --- Handlers ---
   const handleAddMenu = (itemId) => {
@@ -83,6 +138,24 @@ const RestaurantDashboard = () => {
       await updateTable(swapTable.id, { position: table.position });
   };
 
+  const handleCreateWaiter = async (e) => {
+      e.preventDefault();
+      if (!newWaiterUser || !newWaiterPass || !newWaiterName) return alert('Completa todos los campos');
+      
+      await createUser({
+          name: newWaiterName,
+          username: newWaiterUser,
+          password: newWaiterPass,
+          role: 'waiter',
+          restaurant_id: myRestaurant.id
+      });
+      
+      setNewWaiterName('');
+      setNewWaiterUser('');
+      setNewWaiterPass('');
+      alert('Camarero creado exitosamente');
+  };
+
   const getOwnerName = (id) => users.find(u => u.id === id)?.name || '...';
   const getCarritoName = (id) => {
       const carrito = carritos.find(c => c.id === id);
@@ -91,7 +164,48 @@ const RestaurantDashboard = () => {
   const getTableNumber = (id) => tables.find(t => t.id === id)?.table_number || id;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
+        {/* Global QR Modal */}
+        {showQrTableId && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full text-center relative">
+                    <button 
+                        onClick={() => setShowQrTableId(null)} 
+                        className="absolute top-4 right-4 text-gray-500 hover:text-black"
+                    >
+                        <X size={24} />
+                    </button>
+                    
+                    <h2 className="text-2xl font-bold mb-2">Mesa {getTableNumber(showQrTableId)}</h2>
+                    <p className="text-gray-500 mb-6">{myRestaurant.name}</p>
+                    
+                    <div className="bg-white p-4 inline-block border-4 border-gray-100 rounded-lg mb-6">
+                        <QRCodeSVG 
+                            value={`${window.location.origin}/menu/${myRestaurant.id}/${showQrTableId}`}
+                            size={250}
+                            level="H"
+                            includeMargin={true}
+                        />
+                    </div>
+                    
+                    <div className="grid gap-3">
+                        <button 
+                            onClick={() => window.print()} 
+                            className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-2"
+                        >
+                            <QrCode size={20} /> Imprimir QR
+                        </button>
+                        <button 
+                            onClick={() => setShowQrTableId(null)} 
+                            className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-200"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold">{myRestaurant.name}</h1>
             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">Panel de Control</span>
@@ -116,6 +230,18 @@ const RestaurantDashboard = () => {
                 onClick={() => setActiveTab('tables')}
             >
                 Gestionar Mesas ({myTables.length})
+            </button>
+            <button 
+                className={`pb-2 px-4 whitespace-nowrap ${activeTab === 'staff' ? 'border-b-2 border-orange-500 font-bold' : ''}`}
+                onClick={() => setActiveTab('staff')}
+            >
+                Personal ({myWaiters.length})
+            </button>
+            <button 
+                className={`pb-2 px-4 whitespace-nowrap ${activeTab === 'analytics' ? 'border-b-2 border-orange-500 font-bold' : ''}`}
+                onClick={() => setActiveTab('analytics')}
+            >
+                Analítica
             </button>
         </div>
 
@@ -178,6 +304,22 @@ const RestaurantDashboard = () => {
                      <div key={item.id} className="bg-white p-4 rounded shadow border border-gray-200">
                          <h3 className="font-bold">{item.name}</h3>
                          <p className="text-sm text-gray-500 mb-2">{item.description}</p>
+                         
+                         {/* Dietary Tags */}
+                         {item.dietaryTags && item.dietaryTags.length > 0 && (
+                             <div className="flex flex-wrap gap-1 mb-2">
+                                 {item.dietaryTags.map(tagId => {
+                                     const tag = availableTags.find(t => t.id === tagId);
+                                     if (!tag) return null;
+                                     return (
+                                         <span key={tagId} title={tag.label} className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full border border-green-100 flex items-center gap-1">
+                                             {tag.icon} {tag.label}
+                                         </span>
+                                     );
+                                 })}
+                             </div>
+                         )}
+
                          <p className="text-xs text-gray-400 mb-2">Proveedor: {getCarritoName(item.carritoId || item.ownerId)}</p>
                          <div className="flex justify-between items-center bg-gray-50 p-2 rounded">
                              <span className="text-red-500 text-sm font-bold">Costo: ${item.costPrice}</span>
@@ -269,16 +411,6 @@ const RestaurantDashboard = () => {
                                         >
                                             <QrCode size={20} />
                                         </button>
-                                        {showQrTableId === table.id && (
-                                            <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-white p-4 shadow-xl border rounded z-10 w-48 text-center">
-                                                <QRCodeSVG 
-                                                    value={`${window.location.origin}/menu/${myRestaurant.id}/${table.id}`}
-                                                    size={150}
-                                                />
-                                                <p className="mt-2 font-bold text-sm">Mesa {table.table_number}</p>
-                                                <button onClick={() => window.print()} className="text-xs text-blue-500 underline mt-1">Imprimir</button>
-                                            </div>
-                                        )}
                                     </td>
                                     <td className="p-4 text-right flex justify-end gap-3">
                                         <button 
@@ -301,6 +433,165 @@ const RestaurantDashboard = () => {
                     </table>
                 </div>
             </div>
+        )}
+
+        {/* --- TAB: PERSONAL (CAMAREROS) --- */}
+        {activeTab === 'staff' && (
+            <div className="space-y-6">
+                <div className="bg-white p-6 rounded-lg shadow">
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ChefHat /> Registrar Nuevo Camarero</h3>
+                    <form onSubmit={handleCreateWaiter} className="grid md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Nombre Completo</label>
+                            <input 
+                                className="w-full border p-2 rounded" 
+                                value={newWaiterName} 
+                                onChange={e => setNewWaiterName(e.target.value)}
+                                placeholder="Ej: Juan Pérez"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Usuario (Login)</label>
+                            <input 
+                                className="w-full border p-2 rounded" 
+                                value={newWaiterUser} 
+                                onChange={e => setNewWaiterUser(e.target.value)}
+                                placeholder="juan.perez"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Contraseña</label>
+                            <input 
+                                type="password"
+                                className="w-full border p-2 rounded" 
+                                value={newWaiterPass} 
+                                onChange={e => setNewWaiterPass(e.target.value)}
+                                placeholder="******"
+                                required
+                            />
+                        </div>
+                        <div className="md:col-span-3">
+                            <button className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold w-full md:w-auto">
+                                Crear Camarero
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                    <h3 className="font-bold text-lg p-4 border-b bg-gray-50">Lista de Personal</h3>
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-100">
+                            <tr>
+                                <th className="p-4">Nombre</th>
+                                <th className="p-4">Usuario</th>
+                                <th className="p-4">Rol</th>
+                                <th className="p-4">Fecha Ingreso</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {myWaiters.map(waiter => (
+                                <tr key={waiter.id} className="border-b">
+                                    <td className="p-4 font-medium">{waiter.name}</td>
+                                    <td className="p-4 text-gray-600">{waiter.username}</td>
+                                    <td className="p-4"><span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase">Camarero</span></td>
+                                    <td className="p-4 text-sm text-gray-500">{new Date(waiter.created_at).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                            {myWaiters.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-500">No tienes camareros registrados.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
+        {/* --- TAB: ANALYTICS --- */}
+        {activeTab === 'analytics' && (
+             <div className="space-y-8 animate-fade-in">
+                {/* KPI Cards */}
+                <div className="grid gap-6 md:grid-cols-4">
+                    <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+                        <div className="flex items-center gap-3 mb-2 text-green-600"><DollarSign /> <span className="font-bold">Ventas Totales</span></div>
+                        <p className="text-3xl font-bold">${totalSales.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                        <div className="flex items-center gap-3 mb-2 text-blue-600"><ShoppingBag /> <span className="font-bold">Pedidos Cerrados</span></div>
+                        <p className="text-3xl font-bold">{completedOrders.length}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow border-l-4 border-orange-500">
+                        <div className="flex items-center gap-3 mb-2 text-orange-600"><Activity /> <span className="font-bold">Pedidos En Curso</span></div>
+                        <p className="text-3xl font-bold">{activeOrdersList.length}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
+                        <div className="flex items-center gap-3 mb-2 text-purple-600"><TrendingUp /> <span className="font-bold">Ticket Promedio</span></div>
+                        <p className="text-3xl font-bold">${completedOrders.length ? Math.round(totalSales / completedOrders.length).toLocaleString() : 0}</p>
+                    </div>
+                </div>
+
+                <div className="grid gap-8 md:grid-cols-2">
+                    {/* Sales by Carrito Chart */}
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="font-bold text-lg mb-6 text-gray-700">Ventas por Proveedor (Carrito)</h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                               <BarChart data={salesByCarrito} layout="vertical">
+                                   <CartesianGrid strokeDasharray="3 3" />
+                                   <XAxis type="number" />
+                                   <YAxis dataKey="name" type="category" width={100} />
+                                   <Tooltip formatter={(value) => `$${value}`} />
+                                   <Bar dataKey="sales" fill="#82ca9d" name="Ventas ($)" radius={[0, 4, 4, 0]} />
+                               </BarChart>
+                           </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Sales by Waiter Chart */}
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="font-bold text-lg mb-6 text-gray-700">Rendimiento de Camareros</h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                               <BarChart data={salesByWaiter}>
+                                   <CartesianGrid strokeDasharray="3 3" />
+                                   <XAxis dataKey="name" />
+                                   <YAxis />
+                                   <Tooltip formatter={(value) => `$${value}`} />
+                                   <Bar dataKey="sales" fill="#8884d8" name="Ventas ($)" radius={[4, 4, 0, 0]} />
+                               </BarChart>
+                           </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Top Items Table */}
+                <div className="bg-white p-6 rounded-lg shadow">
+                    <h3 className="font-bold text-lg mb-4 text-gray-700">Mis Platos Más Vendidos</h3>
+                    <div className="overflow-x-auto">
+                       <table className="w-full text-left">
+                           <thead className="bg-gray-100 text-gray-600">
+                               <tr>
+                                   <th className="p-4 rounded-tl-lg">Producto</th>
+                                   <th className="p-4 text-right rounded-tr-lg">Cantidad Vendida</th>
+                               </tr>
+                           </thead>
+                           <tbody>
+                               {topItems.map((item, idx) => (
+                                   <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
+                                       <td className="p-4 font-medium">{item.name}</td>
+                                       <td className="p-4 text-right font-bold text-blue-600">{item.quantity}</td>
+                                   </tr>
+                               ))}
+                               {topItems.length === 0 && (
+                                   <tr>
+                                       <td colSpan="2" className="p-8 text-center text-gray-500">No hay datos de ventas aún.</td>
+                                   </tr>
+                               )}
+                           </tbody>
+                       </table>
+                    </div>
+                </div>
+             </div>
         )}
 
         <div className="mt-8 border-t pt-8">
