@@ -7,11 +7,17 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useStore();
+  const { login, isSupabaseEnabled } = useStore();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    if (!isSupabaseEnabled) {
+      setError('Error crítico: No hay conexión con la base de datos (Faltan variables de entorno).');
+      return;
+    }
+
     const success = await login(username, password);
     if (success) {
       // Redirigir según el rol del usuario (esto se manejará en App.jsx o aquí mismo)
