@@ -101,9 +101,10 @@ const Login = () => {
         </form>
 
         <div className="mt-6 text-center text-xs text-gray-500">
-          <p>Credenciales por defecto (Demo):</p>
-          <p>admin / 123</p>
-          <p>carrito1 / 123</p>
+          <p>Credenciales Demo:</p>
+          <p><strong>carrito_demo</strong> / 1234</p>
+          <p><strong>rest_demo</strong> / 1234</p>
+          <p>admin / admin</p>
         </div>
       </div>
     </div>

@@ -119,8 +119,12 @@ export const StoreProvider = ({ children }) => {
 
   const login = async (username, password) => {
     if (isSupabaseEnabled) {
-        const { data } = await supabase.from('users').select('*').eq('username', username).single();
-        if (data && data.password === password) {
+        // Trim whitespace from inputs to avoid copy-paste errors
+        const cleanUsername = username.trim();
+        const cleanPassword = password.trim();
+
+        const { data } = await supabase.from('users').select('*').eq('username', cleanUsername).single();
+        if (data && data.password === cleanPassword) {
             setCurrentUser(data);
             return true;
         }
