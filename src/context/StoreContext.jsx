@@ -92,6 +92,8 @@ export const StoreProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    if (!isSupabaseEnabled) return;
+    
     fetchData();
 
     // Subscribe to all relevant tables
