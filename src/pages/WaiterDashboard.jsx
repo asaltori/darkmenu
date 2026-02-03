@@ -277,24 +277,37 @@ const WaiterDashboard = () => {
                                           {/* We don't have carrito name easily here without looking up, but items usually grouped logically */}
                                           <ul className="text-sm space-y-1">
                                               {groupItems.map((item, idx) => (
-                                                  <li key={idx} className="flex justify-between items-center">
-                                                      <span>
-                                                          {item.name} <span className="text-gray-400">x{item.quantity}</span>
-                                                          <span className={`ml-2 text-[10px] px-1 rounded ${
-                                                              item.status === 'listo' ? 'bg-blue-100 text-blue-800' :
-                                                              item.status === 'en_preparacion' ? 'bg-yellow-100 text-yellow-800' :
-                                                              item.status === 'pendiente' ? 'bg-gray-100 text-gray-500' :
-                                                              item.status === 'en_camino' ? 'bg-orange-100 text-orange-800' :
-                                                              item.status === 'entregado' ? 'bg-purple-100 text-purple-800' :
-                                                              item.status === 'entregado_cliente' ? 'bg-green-100 text-green-800' :
-                                                              'bg-gray-100 text-gray-800'
-                                                          }`}>
-                                                              {item.status === 'entregado' ? 'En Rest.' : 
-                                                               item.status === 'entregado_cliente' ? 'Entregado' : 
-                                                               (item.status || 'pendiente').replace('_', ' ')}
-                                                          </span>
-                                                      </span>
-                                                      <span className="font-medium">${item.sellingPrice * item.quantity}</span>
+                                                  <li key={idx} className="flex justify-between items-center py-1">
+                                                      <div className="flex items-center gap-2">
+                                                          {/* Thumbnail */}
+                                                          <div className="w-8 h-8 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                              {item.image ? (
+                                                                  <img src={item.image} alt="" className="w-full h-full object-cover" />
+                                                              ) : (
+                                                                  <span className="text-xs flex items-center justify-center h-full">🍽️</span>
+                                                              )}
+                                                          </div>
+                                                          
+                                                          <div className="flex flex-col">
+                                                              <span className="font-medium text-sm leading-tight">
+                                                                  {item.name} <span className="text-gray-400 font-normal">x{item.quantity}</span>
+                                                              </span>
+                                                              <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit ${
+                                                                  item.status === 'listo' ? 'bg-blue-100 text-blue-800' :
+                                                                  item.status === 'en_preparacion' ? 'bg-yellow-100 text-yellow-800' :
+                                                                  item.status === 'pendiente' ? 'bg-gray-100 text-gray-500' :
+                                                                  item.status === 'en_camino' ? 'bg-orange-100 text-orange-800' :
+                                                                  item.status === 'entregado' ? 'bg-purple-100 text-purple-800' :
+                                                                  item.status === 'entregado_cliente' ? 'bg-green-100 text-green-800' :
+                                                                  'bg-gray-100 text-gray-800'
+                                                              }`}>
+                                                                  {item.status === 'entregado' ? 'En Rest.' : 
+                                                                   item.status === 'entregado_cliente' ? 'Entregado' : 
+                                                                   (item.status || 'pendiente').replace('_', ' ')}
+                                                              </span>
+                                                          </div>
+                                                      </div>
+                                                      <span className="font-medium text-sm">${item.sellingPrice * item.quantity}</span>
                                                   </li>
                                               ))}
                                           </ul>
